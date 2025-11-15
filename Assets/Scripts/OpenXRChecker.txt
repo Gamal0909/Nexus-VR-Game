@@ -1,0 +1,39 @@
+using UnityEngine;
+using UnityEngine.XR;
+using UnityEngine.XR.Management;
+
+public class OpenXRChecker : MonoBehaviour
+{
+    void Start()
+    {
+        XRLoader activeLoader = XRGeneralSettings.Instance.Manager.activeLoader;
+
+        if (activeLoader == null)
+        {
+            Debug.Log("❌ No XR loader is active. VR is not running.");
+            return;
+        }
+
+        Debug.Log("✅ XR Loader Active: " + activeLoader.name);
+
+        List<InputDevice> devices = new List<InputDevice>();
+        InputDevices.GetDevices(devices);
+
+        bool headsetFound = false;
+
+        foreach (var device in devices)
+        {
+            if (device.characteristics.HasFlag(InputDeviceCharacteristics.HeadMounted))
+            {
+                Debug.Log("🎧 Headset Found: " + device.name);
+                headsetFound = true;
+                break;
+            }
+        }
+
+        if (!headsetFound)
+        {
+            Debug.Log("⚠️ No physical headset detected.");
+        }
+    }
+}
