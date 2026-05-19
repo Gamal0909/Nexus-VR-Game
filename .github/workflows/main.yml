@@ -1,0 +1,113 @@
+name: Unity CI/CD to Itch.io 🚀
+
+on:
+  push:
+    branches: [ main ] # Triggers the workflow when you push to the main branch
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  ITCH_USERNAME: your-itch-username          # Change this!
+  ITCH_GAME_ID: your-game-slug               # Change this!
+
+jobs:
+  # --- JOB 1: RUN TESTS ---
+  test:
+    name: Run Unity Tests 🧪
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Library folder
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ hashFiles('ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: Library-
+
+      # Requesting a temporary activation token for Personal License
+      - name: Free License Activation
+        uses: game-ci/unity-request-activation-file@v2
+        id: step-ulf
+        with:
+          unityEmail: ${{ secrets.UNITY_EMAIL }}
+          unityPassword: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Run EditMode & PlayMode Tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ steps.step-ulf.outputs.ulf }}
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # --- JOB 2: BUILD THE GAME ---
+  build:
+    name: Build Game 🛠️
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        targetPlatform:
+          - StandaloneWindows64 # Builds for Windows
+          - WebGL               # Builds for Web
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Library folder
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: Library-${{ matrix.targetPlatform }}-
+
+      - name: Free License Activation
+        uses: game-ci/unity-request-activation-file@v2
+        id: step-ulf
+        with:
+          unityEmail: ${{ secrets.UNITY_EMAIL }}
+          unityPassword: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Build Unity Project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ steps.step-ulf.outputs.ulf }}
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-${{ matrix.targetPlatform }}
+          path: build/${{ matrix.targetPlatform }}
+
+  # --- JOB 3: DEPLOY TO ITCH.IO ---
+  deploy:
+    name: Push to Itch.io 📦
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        targetPlatform:
+          - StandaloneWindows64
+          - WebGL
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Build-${{ matrix.targetPlatform }}
+          path: build/${{ matrix.targetPlatform }}
+
+      - name: Deploy to Itch.io via Butler
+        uses: josephbmanley/butler-publish- those@v1.2.1 # A lightweight Butler wrapper action
+        with:
+          api_key: ${{ secrets.BUTLER_API_KEY }}
+          channel: ${{ matrix.targetPlatform == 'StandaloneWindows64' && 'windows-x64' || 'webgl' }}
+          game: ${{ env.ITCH_GAME_ID }}
+          user: ${{ env.ITCH_USERNAME }}
+          path: build/${{ matrix.targetPlatform }}
