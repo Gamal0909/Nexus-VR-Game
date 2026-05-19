@@ -2,12 +2,13 @@ name: Unity CI/CD to Itch.io 🚀
 
 on:
   push:
-    branches: [ main ] # Triggers the workflow when you push to the main branch
+    branches: [ main ]
 
 env:
   UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
   ITCH_USERNAME: your-itch-username          # Change this!
   ITCH_GAME_ID: your-game-slug               # Change this!
+  UNITY_PROJECT_PATH: Nexus-VR-Game          # 👈 Set your subfolder name here!
 
 jobs:
   # --- JOB 1: RUN TESTS ---
@@ -23,24 +24,17 @@ jobs:
       - name: Cache Library folder
         uses: actions/cache@v4
         with:
-          path: Library
-          key: Library-${{ hashFiles('ProjectSettings/ProjectVersion.txt') }}
+          path: ${{ env.UNITY_PROJECT_PATH }}/Library
+          key: Library-${{ hashFiles(format('{0}/ProjectSettings/ProjectVersion.txt', env.UNITY_PROJECT_PATH)) }}
           restore-keys: Library-
-
-      # Requesting a temporary activation token for Personal License
-      - name: Free License Activation
-        uses: game-ci/unity-request-activation-file@v2
-        id: step-ulf
-        with:
-          unityEmail: ${{ secrets.UNITY_EMAIL }}
-          unityPassword: ${{ secrets.UNITY_PASSWORD }}
 
       - name: Run EditMode & PlayMode Tests
         uses: game-ci/unity-test-runner@v4
         env:
-          UNITY_LICENSE: ${{ steps.step-ulf.outputs.ulf }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
+          projectPath: ${{ env.UNITY_PROJECT_PATH }} # 👈 Tells the runner where to find the project
 
   # --- JOB 2: BUILD THE GAME ---
   build:
@@ -51,8 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         targetPlatform:
-          - StandaloneWindows64 # Builds for Windows
-          - WebGL               # Builds for Web
+          - StandaloneWindows64
+          - WebGL
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,29 +56,23 @@ jobs:
       - name: Cache Library folder
         uses: actions/cache@v4
         with:
-          path: Library
-          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('ProjectSettings/ProjectVersion.txt') }}
+          path: ${{ env.UNITY_PROJECT_PATH }}/Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles(format('{0}/ProjectSettings/ProjectVersion.txt', env.UNITY_PROJECT_PATH)) }}
           restore-keys: Library-${{ matrix.targetPlatform }}-
-
-      - name: Free License Activation
-        uses: game-ci/unity-request-activation-file@v2
-        id: step-ulf
-        with:
-          unityEmail: ${{ secrets.UNITY_EMAIL }}
-          unityPassword: ${{ secrets.UNITY_PASSWORD }}
 
       - name: Build Unity Project
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ steps.step-ulf.outputs.ulf }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
           targetPlatform: ${{ matrix.targetPlatform }}
+          projectPath: ${{ env.UNITY_PROJECT_PATH }} # 👈 Tells the builder where to find the project
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Build-${{ matrix.targetPlatform }}
-          path: build/${{ matrix.targetPlatform }}
+          path: ${{ env.UNITY_PROJECT_PATH }}/build/${{ matrix.targetPlatform }}
 
   # --- JOB 3: DEPLOY TO ITCH.IO ---
   deploy:
@@ -101,13 +89,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: Build-${{ matrix.targetPlatform }}
-          path: build/${{ matrix.targetPlatform }}
+          path: ${{ env.UNITY_PROJECT_PATH }}/build/${{ matrix.targetPlatform }}
 
       - name: Deploy to Itch.io via Butler
-        uses: josephbmanley/butler-publish- those@v1.2.1 # A lightweight Butler wrapper action
+        uses: josephbmanley/butler-publish-to-itch@v1.2.1
         with:
           api_key: ${{ secrets.BUTLER_API_KEY }}
           channel: ${{ matrix.targetPlatform == 'StandaloneWindows64' && 'windows-x64' || 'webgl' }}
           game: ${{ env.ITCH_GAME_ID }}
           user: ${{ env.ITCH_USERNAME }}
-          path: build/${{ matrix.targetPlatform }}
+          path: ${{ env.UNITY_PROJECT_PATH }}/build/${{ matrix.targetPlatform }}
