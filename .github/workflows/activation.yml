@@ -7,11 +7,13 @@ jobs:
     name: Request Manual Activation File
     runs-on: ubuntu-latest
     steps:
+      # 1. Request the manual activation file (.alf)
       - name: Request manual activation file
-        uses: game-ci/unity-runner@v4
+        uses: game-ci/unity-builder@v4
         with:
-          entrypoint: /version # Just runs a quick command to trigger the runner
+          entrypoint: /version # Runs a quick system check to bypass building and force activation output
           
+      # 2. Upload the generated .alf file as a downloadable artifact
       - name: Upload activation file as artifact
         uses: actions/upload-artifact@v4
         with:
