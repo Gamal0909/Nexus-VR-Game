@@ -1,0 +1,19 @@
+name: Get Unity Activation File 🔑
+
+on: workflow_dispatch # Allows you to run this manually from the Actions tab
+
+jobs:
+  activation:
+    name: Request Manual Activation File
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request manual activation file
+        uses: game-ci/unity-runner@v4
+        with:
+          entrypoint: /version # Just runs a quick command to trigger the runner
+          
+      - name: Upload activation file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-activation-file
+          path: ./*.alf
